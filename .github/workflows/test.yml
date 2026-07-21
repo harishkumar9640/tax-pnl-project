@@ -1,4 +1,4 @@
-$ cat <<'WORKFLOW'                                                                                                                                                                                                                                                          
+$ cat <<'CORRECT_WORKFLOW'                                                                                                                                                                                                                                                  
  name: Tests                                                                                                                                                                                                                                                                 
                                                                                                                                                                                                                                                                              
  on:                                                                                                                                                                                                                                                                         
@@ -31,4 +31,6 @@ $ cat <<'WORKFLOW'
                                                                                                                                                                                                                                                                              
        - name: Run tests                                                                                                                                                                                                                                                     
          run: npm test                                                                                                                                                                                                                                                       
- WORKFLOW
+ CORRECT_WORKFLOW                                                                                                                                                                                                                                                            
+ echo "---"                                                                                                                                                                                                                                                                  
+ echo "
