@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ITRready — Personal ITR Workbook</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">📊</span>
+      <span class="title">ITRready</span>
+      <span class="tagline">Personal ITR workbook · client-side · private</span>
+    </div>
+    <div class="topbar-right">
+      <button id="homeBtn" class="btn-ghost" title="Back to year picker">← Years</button>
+      <span id="viewLabel" class="view-label" aria-live="polite"></span>
+      <button id="profileBtn" class="btn-ghost" title="Personal profile (PAN, address, bank)">Profile</button>
+      <span id="saveStatus" class="save-status" aria-live="polite"></span>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============================================ -->
+    <!-- VIEW: Year picker (home) -->
+    <!-- ============================================ -->
+    <section class="view active" id="view-years" role="region">
+      <div class="years-header">
+        <h1>Your ITR workbooks</h1>
+        <p class="hint">Pick an assessment year to edit, or add a new one. Everything stays in this browser.</p>
+      </div>
+      <div class="year-cards" id="yearCards">
+        <!-- Populated by app.js: one card per saved AY -->
+      </div>
+      <div class="years-actions">
+        <button id="addYearBtn" class="btn-primary">+ Add another year</button>
+        <button id="compareYearsBtn" class="btn-secondary">Compare all years</button>
+      </div>
+      <div id="addYearPicker" class="add-year-picker" style="display: none;">
+        <span>Pick an assessment year:</span>
+        <select id="addYearSelect"></select>
+        <button id="addYearConfirm" class="btn-primary">Create</button>
+        <button id="addYearCancel" class="btn-ghost">Cancel</button>
+      </div>
+    </section>
+
+    <!-- ============================================ -->
+    <!-- VIEW: Year form (drilled in) -->
+    <!-- ============================================ -->
+    <section class="view" id="view-year" role="region">
+      <div class="year-header">
+        <h1 id="yearTitle">AY 2025-26</h1>
+        <p class="hint" id="yearSubtitle">FY 2024-25 · All data stays in this browser</p>
+      </div>
+
+      <nav class="tabs" role="tablist">
+        <button class="tab active" data-tab="salary" role="tab">Salary</button>
+        <button class="tab" data-tab="house" role="tab">House property</button>
+        <button class="tab" data-tab="other" role="tab">Other sources</button>
+        <button class="tab" data-tab="capgains" role="tab">Capital gains</button>
+        <button class="tab" data-tab="deductions" role="tab">Deductions</button>
+        <button class="tab" data-tab="taxes" role="tab">Taxes paid</button>
+        <button class="tab" data-tab="imports" role="tab">Imports</button>
+      </nav>
+
+      <div class="year-body">
+        <div class="year-main">
+          <!-- Personal tab removed: profile is global, edited on the Profile page -->
+          <section class="panel active" id="panel-salary" role="tabpanel">
+            <h2>Salary (per employer)</h2>
+            <p class="hint">One row per employer. Values are annual, gross of TDS.</p>
+            <div id="employers"></div>
+            <button id="addEmployer" class="btn-secondary">+ Add employer</button>
+          </section>
+
+          <section class="panel" id="panel-house" role="tabpanel">
+            <h2>House property</h2>
+            <p class="hint">One row per property. Self-occupied: only home loan interest u/s 24(b) is deductible (max ₹2L).</p>
+            <div id="properties"></div>
+            <button id="addProperty" class="btn-secondary">+ Add property</button>
+          </section>
+
+          <section class="panel" id="panel-other" role="tabpanel">
+            <h2>Income from other sources</h2>
+            <div class="grid grid-2">
+              <label>Savings account interest<input type="number" id="os_savings" min="0" step="any"></label>
+              <label>FD interest<input type="number" id="os_fd" min="0" step="any"></label>
+              <label>RD interest<input type="number" id="os_rd" min="0" step="any"></label>
+              <label>Dividend (gross)<input type="number" id="os_dividend" min="0" step="any"></label>
+              <label>Family pension<input type="number" id="os_family_pension" min="0" step="any"></label>
+              <label>Lottery / crossword winnings<input type="number" id="os_lottery" min="0" step="any"></label>
+            </div>
+            <p class="hint">Lottery is taxed at flat 30% (Section 115BBH) — no slab benefit.</p>
+          </section>
+
+          <section class="panel" id="panel-capgains" role="tabpanel">
+            <h2>Capital gains</h2>
+            <p class="hint">Enter totals for the AY. STCG 111A is taxed at 15%; LTCG 112A at 10% above ₹1L exemption.</p>
+            <div class="grid grid-2">
+              <label>STCG u/s 111A (listed equity, STT paid)<input type="number" id="cg_stcg_111a" min="0" step="any"></label>
+              <label>LTCG u/s 112A (listed equity, STT paid)<input type="number" id="cg_ltcg_112a" min="0" step="any"></label>
+              <label>STCG other (slab rate)<input type="number" id="cg_stcg_other" min="0" step="any"></label>
+              <label>LTCG other (u/s 112, 20% w/ indexation)<input type="number" id="cg_ltcg_other" min="0" step="any"></label>
+              <label>STCL brought forward (lump sum)<input type="number" id="cg_stcl_brought_forward" min="0" step="any"></label>
+              <label>LTCL brought forward (lump sum)<input type="number" id="cg_ltcl_brought_forward" min="0" step="any"></label>
+            </div>
+            <details class="bucket-details">
+              <summary>Per-year loss buckets (8-year expiry)</summary>
+              <p class="hint">Optional. If you have detailed loss-bucket data from prior ITRs, list each here. Buckets whose 8-year window has expired are auto-excluded.</p>
+              <div id="stclBuckets"></div>
+              <button id="addStclBucket" class="btn-tiny">+ Add STCL bucket</button>
+              <h4>LTCL buckets</h4>
+              <div id="ltclBuckets"></div>
+              <button id="addLtclBucket" class="btn-tiny">+ Add LTCL bucket</button>
+            </details>
+          </section>
+
+          <section class="panel" id="panel-deductions" role="tabpanel">
+            <h2>Deductions (Chapter VI-A)</h2>
+            <p class="hint">80TTA / 80TTB are only available in the OLD regime.</p>
+            <div class="grid grid-2">
+              <label>80C (PPF, ELSS, LIC, etc.) — max ₹1,50,000<input type="number" id="ded_80c" min="0" step="any"></label>
+              <label>80CCD(1B) — NPS additional — max ₹50,000<input type="number" id="ded_80ccd_1b" min="0" step="any"></label>
+              <label>80CCD(2) — employer NPS (no cap)<input type="number" id="ded_80ccd_2" min="0" step="any"></label>
+              <label>80D self + family (max ₹25,000)<input type="number" id="ded_80d_self" min="0" step="any"></label>
+              <label>80D parents (max ₹25,000)<input type="number" id="ded_80d_parents" min="0" step="any"></label>
+              <label>80E — education loan interest<input type="number" id="ded_80e" min="0" step="any"></label>
+              <label>80G (50% deduction)<input type="number" id="ded_80g_50pct" min="0" step="any"></label>
+              <label>80G (100% deduction)<input type="number" id="ded_80g_100pct" min="0" step="any"></label>
+              <label>80TTA — savings int (old regime, max ₹10K)<input type="number" id="ded_80tta" min="0" step="any"></label>
+              <label>80TTB — senior int (old regime, max ₹50K)<input type="number" id="ded_80ttb" min="0" step="any"></label>
+            </div>
+          </section>
+
+          <section class="panel" id="panel-taxes" role="tabpanel">
+            <h2>Taxes paid (TDS / advance tax)</h2>
+            <p class="hint">From Form 26AS / AIS. The salary TDS above is summed into the total.</p>
+            <div class="grid grid-2">
+              <label>TDS on other than salary<input type="number" id="taxes_tds_other" min="0" step="any"></label>
+              <label>Advance tax paid<input type="number" id="taxes_advance" min="0" step="any"></label>
+              <label>Self-assessment tax<input type="number" id="taxes_self_assessment" min="0" step="any"></label>
+              <label>TCS (collected at source)<input type="number" id="taxes_tcs" min="0" step="any"></label>
+            </div>
+          </section>
+
+          <section class="panel" id="panel-imports" role="tabpanel">
+            <h2>Imports (Form 16 / Form 26AS / broker P&L)</h2>
+            <p class="hint">All parsing happens in your browser. Nothing is uploaded anywhere. Files are auto-routed to the correct AY based on the FY inside them.</p>
+            <h3>Form 16 (PDF or .txt)</h3>
+            <input type="file" id="form16File" accept=".pdf,.txt">
+            <div id="form16PdfStatus" class="hint" style="margin: 4px 0 8px 0;"></div>
+            <div id="form16Output"></div>
+            <h3>Form 26AS / AIS (JSON)</h3>
+            <input type="file" id="form26asFile" accept=".json">
+            <div id="form26asOutput"></div>
+            <h3>Broker Tax P&L (xlsx)</h3>
+            <input type="file" id="brokerPnlFile" accept=".xlsx,.xls">
+            <div id="brokerPnlStatus" class="hint" style="margin: 4px 0 8px 0;"></div>
+            <div id="brokerPnlOutput"></div>
+          </section>
+        </div>
+
+        <!-- Sticky compute panel (always visible on right) -->
+        <aside class="compute-panel" id="computePanel">
+          <div class="compute-header">
+            <h2>Tax computation <span id="recLabel" class="rec"></span></h2>
+          </div>
+          <div class="compute-grid">
+            <div class="compute-tile">
+              <div class="tile-label">Old regime</div>
+              <div class="tile-value" id="oldTax">₹0</div>
+              <div class="tile-sub" id="oldSub"></div>
+            </div>
+            <div class="compute-tile">
+              <div class="tile-label">New regime</div>
+              <div class="tile-value" id="newTax">₹0</div>
+              <div class="tile-sub" id="newSub"></div>
+            </div>
+            <div class="compute-tile rec-tile">
+              <div class="tile-label">Recommendation</div>
+              <div class="tile-value" id="recTax">—</div>
+              <div class="tile-sub" id="recSub"></div>
+            </div>
+          </div>
+          <details class="compute-details">
+            <summary>Show detailed computation</summary>
+            <div id="computeDetails"></div>
+          </details>
+          <div class="compute-actions">
+            <button id="downloadJson" class="btn-primary">Download ITR JSON</button>
+            <button id="downloadReport" class="btn-primary">Download report (txt)</button>
+            <button id="copyJson" class="btn-secondary">Copy JSON to clipboard</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ============================================ -->
+    <!-- VIEW: Profile (global, not per-year) -->
+    <!-- ============================================ -->
+    <section class="view" id="view-profile" role="region">
+      <div class="profile-header">
+        <h1>Personal profile</h1>
+        <p class="hint">This information is global — it's used across all your year workbooks. (PAN, name, address, bank for refund.)</p>
+      </div>
+      <div class="grid grid-2">
+        <label>Name<input type="text" id="profile_name" autocomplete="name"></label>
+        <label>PAN<input type="text" id="profile_pan" maxlength="10" placeholder="ABCDE1234F"></label>
+        <label>Date of birth<input type="date" id="profile_dob"></label>
+        <label>Mobile<input type="tel" id="profile_mobile" maxlength="10" placeholder="9876543210"></label>
+        <label>Email<input type="email" id="profile_email" autocomplete="email"></label>
+        <label>Aadhaar (last 4)<input type="text" id="profile_aadhaar_last4" maxlength="4" inputmode="numeric" pattern="[0-9]{4}"></label>
+        <label>Filing status
+          <select id="profile_filing_status">
+            <option value="resident">Resident</option>
+            <option value="rnor">Resident but Not Ordinarily Resident (RNOR)</option>
+            <option value="nri">Non-Resident Indian (NRI)</option>
+          </select>
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" id="profile_new_regime">
+          Opt for new tax regime (Section 115BAC) — affects the recommendation
+        </label>
+      </div>
+      <h3>Address</h3>
+      <div class="grid grid-2">
+        <label>Line 1<input type="text" id="profile_address_line1"></label>
+        <label>Line 2<input type="text" id="profile_address_line2"></label>
+        <label>City<input type="text" id="profile_address_city"></label>
+        <label>State<input type="text" id="profile_address_state"></label>
+        <label>Pincode<input type="text" id="profile_address_pincode" maxlength="6" inputmode="numeric"></label>
+        <label>Country<input type="text" id="profile_address_country" value="India" readonly></label>
+      </div>
+      <h3>Bank account (for refund)</h3>
+      <div class="grid grid-2">
+        <label>Account number<input type="text" id="profile_bank_account_number" inputmode="numeric"></label>
+        <label>IFSC<input type="text" id="profile_bank_ifsc" maxlength="11" placeholder="SBIN0001234"></label>
+        <label>Bank name<input type="text" id="profile_bank_bank_name"></label>
+        <label>Account type
+          <select id="profile_bank_account_type">
+            <option value="savings">Savings</option>
+            <option value="current">Current</option>
+            <option value="cc">Cash credit</option>
+            <option value="od">Overdraft</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <!-- ============================================ -->
+    <!-- VIEW: All years comparison -->
+    <!-- ============================================ -->
+    <section class="view" id="view-compare" role="region">
+      <div class="compare-header">
+        <h1>All years side-by-side</h1>
+        <p class="hint">Compare your tax picture across all saved assessment years.</p>
+      </div>
+      <div id="compareTable"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>ITRready v1 · All data stays in this browser. Nothing is sent to any server.</p>
+  </footer>
+
+  <script src="js/pdfjs-stub.js"></script>
+  <script src="js/sheetjs-loader.js"></script>
+  <script src="js/data_model.js"></script>
+  <script src="js/tax_engine.js"></script>
+  <script src="js/validation.js"></script>
+  <script src="js/integrations.js"></script>
+  <script src="js/adapters/index.js"></script>
+  <script src="js/adapters/brokers.js"></script>
+  <script src="js/reports/index.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,659 @@
+/* ITRready stylesheet */
+
+:root {
+  --color-bg: #f5f6fa;
+  --color-surface: #ffffff;
+  --color-border: #d8dbe5;
+  --color-text: #1a1d2b;
+  --color-text-dim: #5a6072;
+  --color-primary: #2563eb;
+  --color-primary-hover: #1e4fc4;
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+  --color-tile-bg: #f0f4ff;
+  --color-rec-bg: #ecfdf5;
+  --color-rec-border: #16a34a;
+  --radius: 6px;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --font-mono: "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* === Top bar === */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: var(--shadow);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.brand .logo { font-size: 22px; }
+.brand .title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+.brand .tagline {
+  font-size: 12px;
+  color: var(--color-text-dim);
+  margin-left: 12px;
+}
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.topbar-right label {
+  font-size: 13px;
+  color: var(--color-text-dim);
+}
+.save-status {
+  font-size: 12px;
+  color: var(--color-text-dim);
+  font-style: italic;
+  min-width: 100px;
+  text-align: right;
+}
+.save-status.saved { color: var(--color-success); }
+.save-status.error { color: var(--color-danger); }
+
+/* === Main === */
+main {
+  max-width: 1200px;
+  margin: 24px auto;
+  padding: 0 24px 100px 24px;
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  main { grid-template-columns: 1fr; }
+}
+
+/* === Tabs === */
+.tabs {
+  grid-column: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+.tab {
+  background: transparent;
+  border: none;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-weight: 500;
+}
+.tab:hover { color: var(--color-text); }
+.tab.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* === Panels === */
+.panel {
+  grid-column: 1;
+  background: var(--color-surface);
+  padding: 24px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: none;
+}
+.panel.active { display: block; }
+.panel h2 {
+  margin: 0 0 4px 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+.panel h3 {
+  margin: 24px 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-dim);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 4px;
+}
+.panel h4 {
+  margin: 16px 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-dim);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--color-text-dim);
+  margin: 0 0 16px 0;
+}
+
+/* === Form fields === */
+.grid {
+  display: grid;
+  gap: 12px 16px;
+}
+.grid-2 { grid-template-columns: 1fr 1fr; }
+.grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+@media (max-width: 600px) {
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  color: var(--color-text-dim);
+  font-weight: 500;
+  gap: 4px;
+}
+label.checkbox {
+  flex-direction: row;
+  align-items: center;
+  font-size: 13px;
+  color: var(--color-text);
+  gap: 8px;
+}
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="tel"],
+input[type="date"],
+select,
+textarea {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  width: 100%;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+input[readonly] { background: #f0f0f4; cursor: default; }
+
+/* === Buttons === */
+button {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 500;
+}
+button:hover { background: #f0f4ff; }
+.btn-primary {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+.btn-primary:hover { background: var(--color-primary-hover); }
+.btn-secondary {
+  background: #e0e7ff;
+  color: var(--color-primary);
+  border-color: #c7d2fe;
+}
+.btn-secondary:hover { background: #c7d2fe; }
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--color-border);
+}
+.btn-tiny {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+.btn-danger {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+  background: transparent;
+}
+.btn-danger:hover { background: #fee2e2; }
+
+/* === Employer / property cards === */
+.card {
+  background: #fafbff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+  position: relative;
+}
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.card-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+.remove-btn {
+  background: transparent;
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger);
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+.remove-btn:hover { background: #fee2e2; }
+
+/* === Bucket details === */
+.bucket-details {
+  margin-top: 16px;
+  padding: 12px;
+  background: #f0f4ff;
+  border-radius: var(--radius);
+}
+.bucket-details summary {
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-primary);
+}
+.bucket-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 32px;
+  gap: 8px;
+  align-items: end;
+  margin-top: 8px;
+}
+
+/* === Compute panel (sticky sidebar) === */
+.compute-panel {
+  grid-column: 2;
+  position: sticky;
+  top: 80px;
+  background: var(--color-surface);
+  padding: 16px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+}
+.compute-header h2 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.rec {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--color-rec-bg);
+  color: var(--color-rec-border);
+  border: 1px solid var(--color-rec-border);
+}
+.rec.tie { background: #fef3c7; color: #92400e; border-color: #92400e; }
+.compute-grid {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.compute-tile {
+  background: var(--color-tile-bg);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid #d1deff;
+}
+.compute-tile.rec-tile {
+  background: var(--color-rec-bg);
+  border-color: var(--color-rec-border);
+}
+.tile-label {
+  font-size: 11px;
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.tile-value {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 2px 0;
+  color: var(--color-text);
+}
+.compute-tile.rec-tile .tile-value {
+  color: var(--color-rec-border);
+}
+.tile-sub {
+  font-size: 11px;
+  color: var(--color-text-dim);
+}
+.compute-details {
+  margin: 12px 0;
+  font-size: 12px;
+  background: #fafbff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+.compute-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--color-text-dim);
+}
+.compute-details pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  max-height: 400px;
+  overflow-y: auto;
+  margin: 8px 0 0 0;
+}
+.compute-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+.compute-actions button {
+  width: 100%;
+}
+
+/* === Import outputs === */
+#form16Output, #form26asOutput {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f0f4ff;
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow-y: auto;
+}
+#form16Output .warn, #form26asOutput .warn {
+  color: var(--color-warning);
+  font-style: italic;
+}
+#form16Output .err, #form26asOutput .err {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+/* === Footer === */
+footer {
+  text-align: center;
+  padding: 16px;
+  font-size: 12px;
+  color: var(--color-text-dim);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  margin-top: 24px;
+}
+
+/* === Year picker dashboard === */
+.years-header {
+  margin-bottom: 24px;
+}
+.years-header h1 {
+  margin: 0 0 4px 0;
+  font-size: 24px;
+}
+.years-header .hint {
+  margin: 0;
+}
+.year-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.year-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+  position: relative;
+}
+.year-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--color-primary);
+}
+.year-card-empty {
+  border: 2px dashed var(--color-border);
+  background: #fafbff;
+}
+.year-card-empty:hover {
+  border-color: var(--color-primary);
+  background: #f0f4ff;
+}
+.year-card-label {
+  font-size: 12px;
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.year-card-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 4px 0;
+  color: var(--color-text);
+}
+.year-card-fy {
+  font-size: 12px;
+  color: var(--color-text-dim);
+  margin-bottom: 12px;
+}
+.year-card-metric {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 8px 0;
+}
+.year-card-sub {
+  font-size: 12px;
+  color: var(--color-text-dim);
+}
+.year-card-status {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-top: 8px;
+}
+.year-card-status.complete {
+  background: var(--color-rec-bg);
+  color: var(--color-rec-border);
+  border: 1px solid var(--color-rec-border);
+}
+.year-card-status.empty {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #92400e;
+}
+.year-card-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--color-text-dim);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 3px;
+  opacity: 0.6;
+}
+.year-card-delete:hover {
+  opacity: 1;
+  color: var(--color-danger);
+  background: #fef2f2;
+}
+.years-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.add-year-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: #f0f4ff;
+  border-radius: var(--radius);
+}
+
+/* === Compare view === */
+.compare-header {
+  margin-bottom: 24px;
+}
+.compare-header h1 {
+  margin: 0 0 4px 0;
+  font-size: 24px;
+}
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.compare-table th,
+.compare-table td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 14px;
+}
+.compare-table th {
+  background: #f0f4ff;
+  font-weight: 600;
+  color: var(--color-text-dim);
+}
+.compare-table tr:last-child td {
+  border-bottom: none;
+}
+.compare-table .refund {
+  color: var(--color-success);
+  font-weight: 600;
+}
+.compare-table .payable {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+.compare-table .ay-cell {
+  font-weight: 700;
+}
+
+/* === Profile page === */
+.profile-header {
+  margin-bottom: 24px;
+}
+.profile-header h1 {
+  margin: 0 0 4px 0;
+  font-size: 24px;
+}
+.profile-header .hint {
+  margin: 0;
+}
+#view-profile .grid-2 {
+  background: var(--color-surface);
+  padding: 20px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 12px;
+}
+#view-profile h3 {
+  margin: 16px 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-dim);
+}
+
+/* === View switching (years, year, profile, compare) === */
+.view {
+  display: none;
+}
+.view.active {
+  display: block;
+}
+
+/* === Year view layout === */
+.year-header {
+  margin-bottom: 16px;
+}
+.year-header h1 {
+  margin: 0 0 4px 0;
+  font-size: 22px;
+}
+.year-header .hint {
+  margin: 0;
+}
+.year-body {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  .year-body { grid-template-columns: 1fr; }
+}
+.year-main {
+  min-width: 0;
+}
+
+/* === Top bar refinements === */
+.view-label {
+  font-size: 12px;
+  color: var(--color-text-dim);
+  font-weight: 500;
+}
+
+/* === Validation visual === */
+input.invalid {
+  border-color: var(--color-danger);
+  background: #fef2f2;
+}
+input.invalid:focus {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+}
