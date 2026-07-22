@@ -259,13 +259,14 @@ test("Deployment footprint: total JS source is <50KB (no heavy deps)", () => {
   }
   const totalKB = total / 1024;
   console.log(`  Total source: ${totalKB.toFixed(1)} KB across ${files.length} files`);
-  // Threshold: 120KB. The 4 engine files include a full IT-Act
+  // Threshold: 130KB. The 4 engine files include a full IT-Act
   // constants block (slabs, caps, 234B/C thresholds, etc.), the
   // Form 16 / 26AS parsers, the validation engine, the v1.1+ data
-  // model with profile split + migration logic, and the
-  // detectAyFromText helper. A static deploy is still tiny
+  // model with profile split + migration logic, the detectAyFromText
+  // helper, and (v1.2+) the senior-citizen + marginal-relief logic
+  // on §80D / §80TTB / surcharge. A static deploy is still tiny
   // compared to a single PDF.js library (~1MB).
-  assert.ok(totalKB < 120, `Total source is ${totalKB.toFixed(1)}KB; should be <120KB`);
+  assert.ok(totalKB < 130, `Total source is ${totalKB.toFixed(1)}KB; should be <130KB`);
 });
 
 test("Deployment footprint: requires no npm install (no package.json deps)", () => {

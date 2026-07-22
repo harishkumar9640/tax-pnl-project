@@ -443,7 +443,12 @@ test("deductions: 80C capped at 1.5L", () => {
   assert.equal(r.deductions.c80c, 150000);
 });
 
-test("deductions: 80TTA only in old regime", () => {
+test("deductions: 80TTA only in old regime (non-senior)", () => {
+  // Per Section 80TTB: 80TTA and 80TTB are mutually exclusive.
+  // 80TTA is for non-seniors (any age), 80TTB is for seniors
+  // (60+). When the user has no DOB, the engine treats them as
+  // non-senior: 80TTA applies (capped at ₹10K), 80TTB is gated
+  // off (regardless of any value the user entered).
   const wb = dm.emptyWorkbook("2025-26");
   wb.salary.employers = [{
     employer_name: "Acme", tan: "", gross_salary: 500000, allowances_exempt_10: 0, professional_tax: 0,
@@ -452,10 +457,10 @@ test("deductions: 80TTA only in old regime", () => {
   wb.deductions["80ttb"] = 60000;
   const old = engine.computeForRegime(wb, "old");
   const newR = engine.computeForRegime(wb, "new");
-  // Old: 80TTA capped at 10K, 80TTB capped at 50K
+  // Old, non-senior: 80TTA capped at 10K, 80TTB gated off (= 0)
   assert.equal(old.deductions.c80tta, 10000);
-  assert.equal(old.deductions.c80ttb, 50000);
-  // New: both 0
+  assert.equal(old.deductions.c80ttb, 0);
+  // New: both 0 (80TTA and 80TTB are old-regime only)
   assert.equal(newR.deductions.c80tta, 0);
   assert.equal(newR.deductions.c80ttb, 0);
 });

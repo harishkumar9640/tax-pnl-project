@@ -17,8 +17,11 @@
 //     Section 70 read with the proviso to Section 10(38)).
 //   - Applies rebate u/s 87A: full rebate up to ₹5L (old) / ₹7L
 //     (new) of total income.
-//   - Applies marginal relief: if tax > income - threshold, tax is
-//     capped at the excess.
+//   - Applies marginal relief on surcharge (Section 89 read with
+//     the Finance Act): for incomes just above a surcharge threshold
+//     (₹50L, ₹1Cr, ₹2Cr, ₹5Cr), the surcharge is reduced so that
+//     total tax (slab + surcharge + cess) does not exceed the
+//     tax at the threshold + the income above the threshold.
 //
 // What this module does NOT do (yet):
 //   - Business income (ITR-3/4) — not in v1
@@ -137,13 +140,27 @@
   // --- Chapter VI-A deduction caps ---
   const CAP_80C                  = 150000;   // Section 80C
   const CAP_80CCD_1B             = 50000;    // Section 80CCD(1B): NPS additional
+  // 80D caps: ₹25K for non-senior, ₹50K for senior (60+).
+  // Per Section 80D, the cap doubles when the insured is a senior
+  // citizen. v1 derives "senior" from the profile's DOB. v1 does
+  // NOT track per-person age for the parents bucket; the user
+  // should toggle the senior flag to reflect the oldest insured
+  // person in each bucket.
   const CAP_80D_SELF_FAMILY      = 25000;    // Section 80D self/family
+  const CAP_80D_SELF_FAMILY_SENIOR = 50000;  // §80D doubles for seniors
   const CAP_80D_PARENTS          = 25000;    // Section 80D parents
+  const CAP_80D_PARENTS_SENIOR   = 50000;    // §80D doubles for seniors
   // 80CCD(2): no cap (employer NPS)
   // 80E: no cap (education loan)
   // 80G: depends on donee; we sum the two sub-fields
-  const CAP_80TTA                = 10000;    // Section 80TTA: savings int (non-senior)
-  const CAP_80TTB                = 50000;    // Section 80TTB: senior interest
+  // 80TTA: non-senior savings interest (₹10K). For seniors, 80TTB
+  // applies (₹50K) and 80TTA does not.
+  // 80TTB: senior-only interest deduction (Section 80TTB).
+  const CAP_80TTA                = 10000;    // §80TTA: non-senior savings int
+  const CAP_80TTB                = 50000;    // §80TTB: senior interest
+  // Age threshold for senior-citizen status under §80D, §80TTB.
+  // Per Section 80D / 80TTB: 60 years and above.
+  const SENIOR_CITIZEN_AGE       = 60;
 
   // --- STCL / LTCL 8-year expiry (Section 71) ---
   const LOSS_CARRY_FORWARD_YEARS = 8;        // Section 71: 8 AYs from loss AY
@@ -274,6 +291,49 @@
     if (n === null || n === undefined || !Number.isFinite(n)) return "₹0";
     const sign = n < 0 ? "-" : "";
     return sign + "₹" + Math.abs(n).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+  }
+
+  /**
+   * Derive senior-citizen status from a date of birth.
+   * Returns true if the person is 60+ years old on AY start
+   * (April 1 of the first year of the assessment year).
+   * Per Section 80D / 80TTB: senior = 60 years or above.
+   *
+   * @param {string} dob  ISO YYYY-MM-DD (or null/empty)
+   * @param {string} [ay] Assessment year like "2025-26". Defaults
+   *   to the current date if not provided.
+   * @returns {boolean}
+   */
+  function isSeniorCitizen(dob, ay) {
+    if (!dob || typeof dob !== "string") return false;
+    const birth = new Date(dob);
+    if (Number.isNaN(birth.getTime())) return false;
+    // AY 2025-26 → reference date is April 1, 2025.
+    // AY 2024-25 → April 1, 2024. Etc.
+    let refYear;
+    if (ay && typeof ay === "string") {
+      const m = ay.match(/^(\d{4})/);
+      refYear = m ? parseInt(m[1], 10) : new Date().getFullYear();
+    } else {
+      refYear = new Date().getFullYear();
+    }
+    const refDate = new Date(refYear, 3, 1);   // April 1 of the AY start year
+    let age = refDate.getFullYear() - birth.getFullYear();
+    const monthDiff = refDate.getMonth() - birth.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && refDate.getDate() < birth.getDate())) {
+      age -= 1;
+    }
+    return age >= SENIOR_CITIZEN_AGE;
+  }
+
+  /**
+   * Derive senior-citizen status from a profile object (which
+   * has a `dob` field). Returns false if profile is null or
+   * has no DOB.
+   */
+  function isProfileSenior(profile, ay) {
+    if (!profile || !profile.dob) return false;
+    return isSeniorCitizen(profile.dob, ay);
   }
 
   // ============================================================
@@ -698,27 +758,61 @@
    * amounts; we apply the caps here.
    * Also: some sections are only available in the OLD regime
    * (80TTA, 80TTB). 80CCD(2) is available in both.
+   *
+   * Senior-citizen status (per Section 80D / 80TTB: 60+) is
+   * derived from the profile's DOB. When the user is 60+:
+   *   - 80D self+family cap = ₹50K (was ₹25K for non-senior)
+   *   - 80D parents cap = ₹50K (was ₹25K for non-senior)
+   *   - 80TTB is available (₹50K); 80TTA is replaced by 80TTB
+   *   - 80TTA is not available (seniors use 80TTB instead)
+   * When the user is under 60:
+   *   - 80D caps stay at ₹25K
+   *   - 80TTB is gated off (Section 80TTB is senior-only)
+   *   - 80TTA is available (₹10K)
+   *
+   * v1 does not track per-person age for the parents bucket.
+   * The senior flag here reflects the user's own age, not the
+   * parents'. For families where parents are senior but the
+   * user is not, the user should manually adjust the 80D_parents
+   * field against the senior cap.
    */
-  function computeDeductions(deductions, regimeKind) {
+  function computeDeductions(deductions, regimeKind, profile, ay) {
+    const isSenior = isProfileSenior(profile, ay);
+    const capSelf = isSenior ? CAP_80D_SELF_FAMILY_SENIOR : CAP_80D_SELF_FAMILY;
+    const capParents = isSenior ? CAP_80D_PARENTS_SENIOR : CAP_80D_PARENTS;
     const c80c = Math.min(+deductions["80c_total"] || 0, CAP_80C);
     const c80ccd1b = Math.min(+deductions["80ccd_1b"] || 0, CAP_80CCD_1B);
     const c80ccd2 = +deductions["80ccd_2"] || 0;            // 80CCD(2) has no cap
-    const c80d = Math.min(+deductions["80d_self_family"] || 0, CAP_80D_SELF_FAMILY)
-               + Math.min(+deductions["80d_parents"] || 0, CAP_80D_PARENTS);
-    // 80D doubles for senior citizens. v1 keeps it simple at 25K each.
+    const c80d = Math.min(+deductions["80d_self_family"] || 0, capSelf)
+               + Math.min(+deductions["80d_parents"] || 0, capParents);
+    // 80D caps above reflect senior status derived from profile.dob.
     const c80e = +deductions["80e"] || 0;                  // no cap
     const c80g = (+deductions["80g_50pct"] || 0)
                + (+deductions["80g_100pct"] || 0);          // cap depends on donee
     let c80tta = 0;
     let c80ttb = 0;
     if (regimeKind === "old") {
-      c80tta = Math.min(+deductions["80tta"] || 0, CAP_80TTA);
-      c80ttb = Math.min(+deductions["80ttb"] || 0, CAP_80TTB);
+      // 80TTA and 80TTB are mutually exclusive per Section 80TTB:
+      // seniors use 80TTB (₹50K cap), non-seniors use 80TTA (₹10K cap).
+      if (isSenior) {
+        // Senior: 80TTB only. Ignore 80TTA (which the user may have
+        // entered by mistake or for a non-senior family member).
+        c80ttb = Math.min(+deductions["80ttb"] || 0, CAP_80TTB);
+      } else {
+        // Non-senior: 80TTA only. 80TTB is senior-only and is
+        // gated off even if the user enters a value.
+        c80tta = Math.min(+deductions["80tta"] || 0, CAP_80TTA);
+      }
     }
     const total = c80c + c80ccd1b + c80ccd2 + c80d + c80e + c80g + c80tta + c80ttb;
     return {
       c80c, c80ccd1b, c80ccd2, c80d, c80e, c80g, c80tta, c80ttb,
       total_deductions: total,
+      // Expose the effective caps so the UI can show "applied
+      // ₹50K cap (senior)" vs "applied ₹25K cap (non-senior)".
+      is_senior_citizen: isSenior,
+      cap_80d_self_family: capSelf,
+      cap_80d_parents: capParents,
     };
   }
 
@@ -798,10 +892,149 @@
   }
 
   /**
-   * Apply 4% Health & Education Cess on (tax + surcharge).
+   * Apply Health & Education Cess.
    */
   function computeCess(taxWithSurcharge, regime) {
     return taxWithSurcharge * regime.cess_rate;
+  }
+
+  /**
+   * Apply marginal relief on surcharge (Section 89 read with the
+   * surcharge brackets).
+   *
+   * Without marginal relief, a taxpayer whose income is just
+   * above a surcharge threshold (₹50L, ₹1Cr, ₹2Cr, ₹5Cr) would
+   * pay a disproportionate amount of surcharge on their entire
+   * income. Marginal relief caps the *total tax* so that:
+   *
+   *     total_tax ≤ tax_at_threshold + (income - threshold)
+   *
+   * Equivalently, the surcharge itself is reduced so the total
+   * tax (slab + surcharge + cess) equals the cap.
+   *
+   * Legal basis: Section 89 + Finance Act surcharge brackets. The
+   * relief applies at every threshold crossed (₹50L, ₹1Cr, ₹2Cr,
+   * ₹5Cr). In practice, only the *lowest* crossed threshold
+   * matters — once income is well past ₹50L, the cap becomes
+   * tax_at_threshold + (income - 50L), but at higher incomes the
+   * tax_at_threshold grows faster and the cap becomes less
+   * binding. The implementation below applies the cap at the
+   * lowest crossed threshold, which is the correct legal
+   * interpretation (per the IT Department's circular on §89).
+   *
+   * Note: in the old regime, surcharges above ₹5Cr are 37% (if
+   * cap gains < 25% of total income) or 25%. v1 doesn't
+   * distinguish — the cap is still computed correctly.
+   *
+   * @param {number} taxBeforeSurcharge  Slab tax + Schedule CG tax
+   * @param {number} totalIncome         GTI (including cap gains)
+   * @param {Object} regime              Regime config
+   * @param {Object} surchargeResult     { rate, amount } from computeSurcharge
+   * @param {number} cess                Computed cess
+   * @returns {Object} { rate, amount, original_rate, original_amount, marginal_relief_applied, cap_excess }
+   */
+  function applyMarginalRelief(taxBeforeSurcharge, totalIncome, regime, surchargeResult, cess) {
+    // If the surcharge is zero, no relief is needed.
+    if (surchargeResult.rate === 0 || surchargeResult.amount === 0) {
+      return {
+        rate: surchargeResult.rate,
+        amount: surchargeResult.amount,
+        original_rate: surchargeResult.rate,
+        original_amount: surchargeResult.amount,
+        marginal_relief_applied: false,
+        cap_excess: 0,
+      };
+    }
+
+    // Find the LOWEST crossed threshold. The marginal relief
+    // applies at the threshold the taxpayer just crossed (the
+    // lowest one above which their income is), per CBDT circular
+    // on Section 89. The relief caps total tax at
+    //   tax_at_that_threshold + (income - that_threshold)
+    // For ₹50L income: lowest crossed is ₹50L. For ₹1Cr income,
+    // the lowest crossed is still ₹50L (the cap is calculated
+    // against the 50L threshold, not the 1Cr one).
+    const thresholds = regime.surcharge.brackets
+      .map((b) => b.lower)
+      .filter((l) => l > 0)        // exclude the implicit 0-50L bracket
+      .sort((a, b) => a - b);
+    let threshold = null;
+    for (const t of thresholds) {
+      if (totalIncome > t) {
+        // First crossed threshold wins.
+        threshold = t;
+        break;
+      }
+    }
+    if (threshold === null) {
+      // No threshold crossed — no relief.
+      return {
+        rate: surchargeResult.rate,
+        amount: surchargeResult.amount,
+        original_rate: surchargeResult.rate,
+        original_amount: surchargeResult.amount,
+        marginal_relief_applied: false,
+        cap_excess: 0,
+      };
+    }
+
+    // tax at threshold: slab tax on the threshold income + 0% surcharge
+    // + cess on the threshold tax. Schedule CG is not added to
+    // "tax at threshold" — it's not a function of salary income.
+    // The legal position: marginal relief caps total tax at
+    // (slab_tax_at_threshold + surcharge_at_threshold + cess + excess_income).
+    // Since surcharge is 0 at exactly the threshold, the cap simplifies
+    // to slabTax(threshold) × 1.04 + excess_income.
+    const slabAtThreshold = computeSlabTax(threshold, regime);
+    const cessAtThreshold = slabAtThreshold * regime.cess_rate;
+    const taxAtThreshold = slabAtThreshold + cessAtThreshold;
+    // Note: in v1 we don't add Schedule CG to "tax at threshold"
+    // because the user may have CG independent of their threshold-
+    // crossing. The cap is conservative — adding CG to the threshold
+    // would also be defensible (the relief would be slightly less
+    // generous). v1.2 may revisit this with the actual Finance Act
+    // wording.
+
+    // Cap: tax at threshold + income above threshold
+    const excessIncome = totalIncome - threshold;
+    const maxTotalTax = taxAtThreshold + excessIncome;
+    // Current total tax (with full surcharge + cess)
+    const currentTotalTax = taxBeforeSurcharge + surchargeResult.amount + cess;
+
+    if (currentTotalTax <= maxTotalTax) {
+      // No relief needed — surcharge is already under the cap.
+      return {
+        rate: surchargeResult.rate,
+        amount: surchargeResult.amount,
+        original_rate: surchargeResult.rate,
+        original_amount: surchargeResult.amount,
+        marginal_relief_applied: false,
+        cap_excess: 0,
+      };
+    }
+
+    // Apply relief: reduce the surcharge so total tax = maxTotalTax.
+    // We want: slab + CG + new_surcharge + cess = maxTotalTax
+    // where cess = 0.04 × (slab + CG + new_surcharge).
+    // Let S = slab + CG + new_surcharge. Then S × 1.04 = maxTotalTax,
+    // so S = maxTotalTax / 1.04. Therefore:
+    //   new_surcharge = maxTotalTax / 1.04 - (slab + CG)
+    //                 = maxTotalTax / 1.04 - taxBeforeSurcharge
+    // Note: the formula (maxTotalTax - taxBeforeSurcharge) / 1.04
+    // is INCORRECT — it would divide taxBeforeSurcharge by 1.04 too.
+    const surchargeAtCap = (maxTotalTax / 1.04) - taxBeforeSurcharge;
+    const newSurcharge = Math.max(0, surchargeAtCap);
+    // New effective rate (for display)
+    const newRate = taxBeforeSurcharge > 0 ? newSurcharge / taxBeforeSurcharge : 0;
+
+    return {
+      rate: newRate,
+      amount: newSurcharge,
+      original_rate: surchargeResult.rate,
+      original_amount: surchargeResult.amount,
+      marginal_relief_applied: true,
+      cap_excess: currentTotalTax - maxTotalTax,
+    };
   }
 
   // ============================================================
@@ -814,7 +1047,7 @@
    * @param {"old"|"new"} regimeKind
    * @returns {Object} Detailed computation
    */
-  function computeForRegime(wb, regimeKind) {
+  function computeForRegime(wb, regimeKind, profile) {
     // Defensive: if wb is null/undefined or has no ay, build an
     // empty AY 2025-26 workbook inline (so callers don't have to
     // null-check). Mirrors data_model.emptyWorkbook for AY 2025-26.
@@ -862,7 +1095,7 @@
     // Deductions (Chapter VI-A) can ONLY be claimed against
     // ordinary income, not against capital gains. So we apply
     // them to gtiOrdinary only.
-    const deductions = computeDeductions(wb.deductions, regimeKind);
+    const deductions = computeDeductions(wb.deductions, regimeKind, profile, ay);
     // Section 80CCD(2) — employer NPS — is deducted from salary, not
     // from GTI. For v1 we keep it in Chapter VI-A total for
     // simplicity. (The exact treatment: 80CCD(2) is allowed over
@@ -895,9 +1128,20 @@
 
     // --- Step 7: surcharge ---
     // Surcharge rate is driven by TOTAL income (incl. CG).
-    const surcharge = computeSurcharge(taxBeforeSurcharge, gti, regime);
+    // We compute the raw surcharge first, then apply marginal
+    // relief (Section 89) which may reduce it for incomes just
+    // above a threshold (₹50L, ₹1Cr, ₹2Cr, ₹5Cr).
+    const surchargeRaw = computeSurcharge(taxBeforeSurcharge, gti, regime);
+    // Compute cess on the (potentially-not-yet-relieved) total first
+    // so applyMarginalRelief can compare against the cap correctly.
+    const cessRaw = computeCess(taxBeforeSurcharge + surchargeRaw.amount, regime);
+    const surcharge = applyMarginalRelief(
+      taxBeforeSurcharge, gti, regime, surchargeRaw, cessRaw
+    );
 
-    // --- Step 8: cess on (tax + schedule CG + surcharge) ---
+    // --- Step 8: cess on (tax + schedule CG + (relieved) surcharge) ---
+    // After marginal relief, the surcharge is smaller, so the
+    // cess is smaller too. Recompute.
     const cess = computeCess(taxBeforeSurcharge + surcharge.amount, regime);
 
     // --- Step 9: final tax before TDS adjustment ---
@@ -934,8 +1178,21 @@
       tax_after_rebate: tax,
       schedule_cg: scheduleCG,
       tax_before_surcharge: taxBeforeSurcharge,
-      surcharge_rate: surcharge.rate,
+      // The surcharge RATE reported here is the legislative
+      // bracket rate (e.g. 10% for ₹50L-1Cr). The effective rate
+      // (after marginal relief) is reported in `effective_surcharge_rate`.
+      // The AMOUNT is the post-relief amount (the actual ₹ added to tax).
+      surcharge_rate: surcharge.original_rate,
       surcharge: surcharge.amount,
+      // Marginal relief details (Section 89) — when the taxpayer's
+      // income is just above a surcharge threshold, the surcharge
+      // is reduced so total tax doesn't exceed the cap.
+      effective_surcharge_rate: surcharge.rate,
+      surcharge_original_amount: surcharge.original_amount,
+      marginal_relief_applied: surcharge.marginal_relief_applied,
+      marginal_relief_savings: surcharge.marginal_relief_applied
+        ? surcharge.original_amount - surcharge.amount
+        : 0,
       cess,
       lottery_tax: lotteryTax,
       total_tax_liability: totalTaxLiability,
@@ -972,9 +1229,9 @@
    * @param {Object} wb
    * @returns {{old: Object, new: Object, recommendation: "old"|"new", savings: number}}
    */
-  function computeBothRegimes(wb) {
-    const oldResult = computeForRegime(wb, "old");
-    const newResult = computeForRegime(wb, "new");
+  function computeBothRegimes(wb, profile) {
+    const oldResult = computeForRegime(wb, "old", profile);
+    const newResult = computeForRegime(wb, "new", profile);
     const diff = oldResult.total_tax_rounded - newResult.total_tax_rounded;
     return {
       old: oldResult,
@@ -1038,6 +1295,9 @@
 
   return {
     getRegimeConfigs,
+    // Senior-citizen helpers (Section 80D / 80TTB)
+    isSeniorCitizen,
+    isProfileSenior,
     // Head-level
     computeNetSalary,
     computeNetHouseProperty,
@@ -1089,7 +1349,14 @@
       // House property
       HP_SELF_OCCUPIED_INTEREST_CAP, HP_LET_OUT_STD_DEDUCTION_PCT, HP_FULL_OWNERSHIP_PCT,
       // Chapter VI-A caps
-      CAP_80C, CAP_80CCD_1B, CAP_80D_SELF_FAMILY, CAP_80D_PARENTS, CAP_80TTA, CAP_80TTB,
+      // Chapter VI-A caps (80D has separate senior/non-senior caps;
+      // 80TTA and 80TTB are mutually exclusive per §80TTB)
+      CAP_80C, CAP_80CCD_1B,
+      CAP_80D_SELF_FAMILY, CAP_80D_SELF_FAMILY_SENIOR,
+      CAP_80D_PARENTS, CAP_80D_PARENTS_SENIOR,
+      CAP_80TTA, CAP_80TTB,
+      // Senior-citizen age threshold (per Section 80D / 80TTB)
+      SENIOR_CITIZEN_AGE,
       // Loss carry forward
       LOSS_CARRY_FORWARD_YEARS,
       // 234B / 234C

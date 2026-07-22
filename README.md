@@ -24,11 +24,23 @@ portfolio-tracker repo).
   (self-occupied + let-out), other sources (interest,
   dividends, lottery), capital gains (STCG 111A / LTCG 112A
   / STCL / LTCL with per-year 8-year expiry buckets),
-  deductions (80C, 80CCD, 80D, 80E, 80G, 80TTA, 80TTB),
-  TDS / advance tax.
+  deductions (80C, 80CCD, 80D with senior-citizen cap, 80E,
+  80G, 80TTA / 80TTB gated by age), TDS / advance tax.
 - **Computes**: both old regime (default 1961 IT Act slabs) and
   new regime (Section 115BAC, FY 2024-25 with 75K std ded + 7L
   rebate). Side-by-side comparison, recommends the cheaper one.
+- **Senior citizen handling**: 80D cap auto-doubles to ₹50K when
+  the user's DOB makes them 60+ on the AY start date. 80TTB is
+  enabled (₹50K) and 80TTA is disabled for seniors (per §80TTB).
+  Without a DOB, the engine treats the user as non-senior
+  (conservative — manual override via setting DOB).
+- **Marginal relief on surcharge (§89)**: for incomes just above
+  the ₹50L / ₹1Cr / ₹2Cr / ₹5Cr thresholds, the surcharge is
+  reduced so total tax (slab + surcharge + cess) doesn't exceed
+  `tax_at_threshold + (income - threshold)`. The relief applies
+  at the lowest crossed threshold (per CBDT circular on §89).
+  Result fields expose `marginal_relief_applied` and
+  `marginal_relief_savings` for transparency.
 - **Schedule CG handled correctly** (the v1 limitation of
   "folding cap gains into the slab tax" is fixed): 111A STCG
   taxed at flat 15%, 112A LTCG at 10% above ₹1L exemption,

@@ -437,13 +437,52 @@ test("Section 80TTA: savings interest ₹10,000 (only OLD regime, non-senior)", 
 });
 
 test("Section 80TTB: senior citizen interest ₹50,000 (only OLD regime)", () => {
+  // Per Section 80TTB: only senior citizens (60+) can claim.
+  // The engine derives senior status from profile.dob. If the
+  // user hasn't set a DOB, the engine treats them as non-senior
+  // and 80TTB is gated off (regardless of any value entered).
+  // To claim 80TTB, the user must be 60+ on the AY start date.
   const wb = buildSalariedWB("2025-26", 800000, { deductions: { "80ttb": 60000 } });
   const old = engine.computeForRegime(wb, "old");
   const newR = engine.computeForRegime(wb, "new");
-  // Old: capped to 50K
-  assert.equal(old.deductions.c80ttb, 50000);
-  // New: 0
+  // No DOB → treated as non-senior → 80TTB gated off (even though
+  // the user typed 60000). This is the correct behavior post-fix.
+  assert.equal(old.deductions.c80ttb, 0);
   assert.equal(newR.deductions.c80ttb, 0);
+});
+
+test("Section 80TTB: senior citizen (DOB makes 60+) gets full ₹50K", () => {
+  // Build a profile with a DOB making the user 65 on April 1, 2025.
+  // DOB = 1959-04-01 → age on 2025-04-01 = 66 (senior).
+  const profile = dm.emptyProfile();
+  profile.dob = "1959-04-01";
+  const wb = buildSalariedWB("2025-26", 800000, { deductions: { "80ttb": 60000 } });
+  const old = engine.computeForRegime(wb, "old", profile);
+  // Senior → 80TTB allowed, capped at 50K
+  assert.equal(old.deductions.c80ttb, 50000);
+  assert.equal(old.deductions.is_senior_citizen, true);
+});
+
+test("Section 80TTB: 80TTA and 80TTB are mutually exclusive (per §80TTB)", () => {
+  // Per Section 80TTB: a senior cannot use 80TTA. A non-senior
+  // cannot use 80TTB. The engine enforces this.
+  // Non-senior with both entered: only 80TTA applied
+  const nonSenior = dm.emptyProfile();   // no DOB
+  const wb1 = buildSalariedWB("2025-26", 800000, {
+    deductions: { "80tta": 12000, "80ttb": 50000 },
+  });
+  const r1 = engine.computeForRegime(wb1, "old", nonSenior);
+  assert.equal(r1.deductions.c80tta, 10000);  // capped at 10K
+  assert.equal(r1.deductions.c80ttb, 0);       // gated off for non-senior
+  // Senior with both entered: only 80TTB applied
+  const senior = dm.emptyProfile();
+  senior.dob = "1959-04-01";
+  const wb2 = buildSalariedWB("2025-26", 800000, {
+    deductions: { "80tta": 12000, "80ttb": 50000 },
+  });
+  const r2 = engine.computeForRegime(wb2, "old", senior);
+  assert.equal(r2.deductions.c80tta, 0);        // 80TTA not for seniors
+  assert.equal(r2.deductions.c80ttb, 50000);   // 80TTB applies
 });
 
 // ============================================================
