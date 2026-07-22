@@ -324,6 +324,17 @@ button:hover { background: #f0f4ff; }
   border: 1px solid var(--color-rec-border);
 }
 .rec.tie { background: #fef3c7; color: #92400e; border-color: #92400e; }
+.senior-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+  margin-top: 4px;
+}
 .compute-grid {
   display: grid;
   gap: 8px;
@@ -435,6 +446,39 @@ footer {
 }
 .years-header .hint {
   margin: 0;
+}
+.privacy-callout {
+  margin-top: 12px;
+  background: #ecfdf5;            /* light green — "safe" */
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  font-size: 13px;
+  color: #166534;                /* dark green text */
+}
+.privacy-callout summary {
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 14px;
+  color: #14532d;
+  list-style: none;
+  display: flex;
+  align-items: center;
+}
+.privacy-callout summary::-webkit-details-marker {
+  display: none;
+}
+.privacy-callout summary::before {
+  content: "🔒 ";
+  margin-right: 4px;
+  font-size: 14px;
+}
+.privacy-callout[open] summary {
+  margin-bottom: 8px;
+}
+.privacy-callout p {
+  margin: 0;
+  line-height: 1.5;
 }
 .year-cards {
   display: grid;

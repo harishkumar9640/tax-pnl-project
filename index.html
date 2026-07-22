@@ -28,7 +28,11 @@
     <section class="view active" id="view-years" role="region">
       <div class="years-header">
         <h1>Your ITR workbooks</h1>
-        <p class="hint">Pick an assessment year to edit, or add a new one. Everything stays in this browser.</p>
+        <p class="hint">Pick an assessment year to edit, or add a new one.</p>
+        <details class="privacy-callout">
+          <summary>Built different: no server, no signup, no data collection</summary>
+          <p>Every other ITR tool asks you to upload your Form 16, broker P&amp;L, or 26AS to their servers — or log in to your broker account directly. ITRready doesn't. All parsing and tax computation happens locally in your browser using JavaScript; your data is saved only in your browser's local storage and is never transmitted anywhere. Close the tab, and nothing about your finances has touched the internet.</p>
+        </details>
       </div>
       <div class="year-cards" id="yearCards">
         <!-- Populated by app.js: one card per saved AY -->
@@ -165,6 +169,7 @@
         <aside class="compute-panel" id="computePanel">
           <div class="compute-header">
             <h2>Tax computation <span id="recLabel" class="rec"></span></h2>
+            <div id="seniorBadge" class="senior-badge" style="display: none;">Senior citizen (60+)</div>
           </div>
           <div class="compute-grid">
             <div class="compute-tile">

@@ -769,9 +769,22 @@
     const chosen = rec === "new" ? taxResult.new
                 : rec === "old" ? taxResult.old
                 : (profile && profile.new_regime ? taxResult.new : taxResult.old);
+    // Show / hide the senior-citizen badge based on profile.dob
+    const seniorBadge = document.getElementById("seniorBadge");
+    if (seniorBadge) {
+      if (chosen.deductions.is_senior_citizen) {
+        seniorBadge.style.display = "inline-block";
+        seniorBadge.textContent = `Senior citizen (60+) · 80D cap ₹${chosen.deductions.cap_80d_self_family / 1000}K`;
+      } else {
+        seniorBadge.style.display = "none";
+      }
+    }
     const cg = chosen.schedule_cg;
     const details = document.getElementById("computeDetails");
     details.innerHTML = `<pre>${escapeHtml(JSON.stringify({
+      senior_citizen: chosen.deductions.is_senior_citizen,
+      cap_80d_self_family: chosen.deductions.cap_80d_self_family,
+      cap_80d_parents: chosen.deductions.cap_80d_parents,
       gti: chosen.gti,
       gti_ordinary: chosen.gti_ordinary,
       total_deductions: chosen.deductions.total_deductions,
