@@ -194,3 +194,5 @@ const reportText = reports.buildReport(wb, result);
 ## License
 
 Same as the parent portfolio-tracker repo.
+
+<!-- diagnostic marker Wed Jul 22 07:54:53 IST 2026 -->
