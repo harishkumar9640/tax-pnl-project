@@ -153,9 +153,9 @@
             <p class="hint">All parsing happens in your browser. Nothing is uploaded anywhere. Files are auto-routed to the correct AY based on the FY inside them.</p>
 
             <!-- ============================================ -->
-            <!-- BULK DROP ZONE (new in v1.2) -->
+            <!-- 1) BULK DROP ZONE (v1.2): drop everything here -->
             <!-- ============================================ -->
-            <h3>📦 Bulk import for an FY (drop everything here)</h3>
+            <h3>📦 <span style="color:#1e40af;">Bulk import for an FY (drop everything here)</span></h3>
             <p class="hint">Drop <strong>any combination</strong> of files at once &mdash; Form 16 PDF, Form 16A PDF, Form 26AS / AIS JSON, bank interest certificate, broker Tax P&amp;L xlsx. The app classifies each file, detects the FY, and pre-fills the staging table below. You review and click "Apply all" to commit.</p>
             <div id="bulkDropZone" class="dropzone" tabindex="0" role="button"
                  aria-label="Drop files here or click to browse">
@@ -178,24 +178,38 @@
               <button id="bulkClear" class="btn-ghost">Clear staging</button>
             </div>
 
+            <hr style="margin: 24px 0; border: none; border-top: 1px dashed var(--color-border);">
+
             <!-- ============================================ -->
-            <!-- ADVANCED: per-file single inputs (kept for backward compat) -->
+            <!-- 2) Form 16 (single) -->
             <!-- ============================================ -->
-            <details class="advanced-imports">
-              <summary>Advanced: upload files one at a time (legacy)</summary>
-              <p class="hint">The single-file inputs below are kept for backward compatibility. The bulk drop zone above handles the same file types plus bank interest certificates and Form 16A, with automatic conflict resolution.</p>
-              <h3>Form 16 (PDF or .txt)</h3>
-              <input type="file" id="form16File" accept=".pdf,.txt">
-              <div id="form16PdfStatus" class="hint" style="margin: 4px 0 8px 0;"></div>
-              <div id="form16Output"></div>
-              <h3>Form 26AS / AIS (JSON)</h3>
-              <input type="file" id="form26asFile" accept=".json">
-              <div id="form26asOutput"></div>
-              <h3>Broker Tax P&L (xlsx)</h3>
-              <input type="file" id="brokerPnlFile" accept=".xlsx,.xls">
-              <div id="brokerPnlStatus" class="hint" style="margin: 4px 0 8px 0;"></div>
-              <div id="brokerPnlOutput"></div>
-            </details>
+            <h3>📄 Form 16 (single file)</h3>
+            <p class="hint">For text-based PDFs (TRACES export). Scanned PDFs need OCR first.</p>
+            <input type="file" id="form16File" accept=".pdf,.txt">
+            <div id="form16PdfStatus" class="hint" style="margin: 4px 0 8px 0;"></div>
+            <div id="form16Output"></div>
+
+            <!-- ============================================ -->
+            <!-- 3) Form 26AS / AIS (single) -->
+            <!-- ============================================ -->
+            <h3 style="margin-top: 20px;">🏦 Form 26AS / AIS (single file)</h3>
+            <p class="hint">JSON export from the income-tax e-filing portal.</p>
+            <input type="file" id="form26asFile" accept=".json">
+            <div id="form26asOutput"></div>
+
+            <!-- ============================================ -->
+            <!-- 4) Broker Tax P&L (single) -->
+            <!-- ============================================ -->
+            <h3 style="margin-top: 20px;">📈 Broker Tax P&L (single file)</h3>
+            <p class="hint">Angel One .xlsx or Zerodha Console .csv. Auto-routed to the right AY.</p>
+            <input type="file" id="brokerPnlFile" accept=".xlsx,.xls">
+            <div id="brokerPnlStatus" class="hint" style="margin: 4px 0 8px 0;"></div>
+            <div id="brokerPnlOutput"></div>
+
+            <p class="hint" style="margin-top: 16px;">
+              💡 <strong>Tip:</strong> The bulk drop zone above is faster for multiple files and
+              handles bank interest certificates + Form 16A + cross-file conflict detection.
+            </p>
           </section>
         </div>
 
