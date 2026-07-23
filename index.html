@@ -151,17 +151,51 @@
           <section class="panel" id="panel-imports" role="tabpanel">
             <h2>Imports (Form 16 / Form 26AS / broker P&L)</h2>
             <p class="hint">All parsing happens in your browser. Nothing is uploaded anywhere. Files are auto-routed to the correct AY based on the FY inside them.</p>
-            <h3>Form 16 (PDF or .txt)</h3>
-            <input type="file" id="form16File" accept=".pdf,.txt">
-            <div id="form16PdfStatus" class="hint" style="margin: 4px 0 8px 0;"></div>
-            <div id="form16Output"></div>
-            <h3>Form 26AS / AIS (JSON)</h3>
-            <input type="file" id="form26asFile" accept=".json">
-            <div id="form26asOutput"></div>
-            <h3>Broker Tax P&L (xlsx)</h3>
-            <input type="file" id="brokerPnlFile" accept=".xlsx,.xls">
-            <div id="brokerPnlStatus" class="hint" style="margin: 4px 0 8px 0;"></div>
-            <div id="brokerPnlOutput"></div>
+
+            <!-- ============================================ -->
+            <!-- BULK DROP ZONE (new in v1.2) -->
+            <!-- ============================================ -->
+            <h3>📦 Bulk import for an FY (drop everything here)</h3>
+            <p class="hint">Drop <strong>any combination</strong> of files at once &mdash; Form 16 PDF, Form 16A PDF, Form 26AS / AIS JSON, bank interest certificate, broker Tax P&amp;L xlsx. The app classifies each file, detects the FY, and pre-fills the staging table below. You review and click "Apply all" to commit.</p>
+            <div id="bulkDropZone" class="dropzone" tabindex="0" role="button"
+                 aria-label="Drop files here or click to browse">
+              <div class="dropzone-content">
+                <div class="dropzone-icon">📥</div>
+                <div class="dropzone-text">
+                  <strong>Drop files here</strong>
+                  <span>or click to browse</span>
+                  <small>Accepts .pdf, .xlsx, .xls, .csv, .json, .txt (any mix)</small>
+                </div>
+              </div>
+              <input type="file" id="bulkFileInput" multiple
+                     accept=".pdf,.xlsx,.xls,.csv,.json,.txt"
+                     style="display: none;">
+            </div>
+            <div id="bulkStatus" class="bulk-status" aria-live="polite"></div>
+            <div id="bulkStaging" class="bulk-staging"></div>
+            <div id="bulkActions" class="bulk-actions" style="display: none;">
+              <button id="bulkApplyAll" class="btn-primary">Apply all to workbooks</button>
+              <button id="bulkClear" class="btn-ghost">Clear staging</button>
+            </div>
+
+            <!-- ============================================ -->
+            <!-- ADVANCED: per-file single inputs (kept for backward compat) -->
+            <!-- ============================================ -->
+            <details class="advanced-imports">
+              <summary>Advanced: upload files one at a time (legacy)</summary>
+              <p class="hint">The single-file inputs below are kept for backward compatibility. The bulk drop zone above handles the same file types plus bank interest certificates and Form 16A, with automatic conflict resolution.</p>
+              <h3>Form 16 (PDF or .txt)</h3>
+              <input type="file" id="form16File" accept=".pdf,.txt">
+              <div id="form16PdfStatus" class="hint" style="margin: 4px 0 8px 0;"></div>
+              <div id="form16Output"></div>
+              <h3>Form 26AS / AIS (JSON)</h3>
+              <input type="file" id="form26asFile" accept=".json">
+              <div id="form26asOutput"></div>
+              <h3>Broker Tax P&L (xlsx)</h3>
+              <input type="file" id="brokerPnlFile" accept=".xlsx,.xls">
+              <div id="brokerPnlStatus" class="hint" style="margin: 4px 0 8px 0;"></div>
+              <div id="brokerPnlOutput"></div>
+            </details>
           </section>
         </div>
 
@@ -275,8 +309,11 @@
   <script src="js/tax_engine.js"></script>
   <script src="js/validation.js"></script>
   <script src="js/integrations.js"></script>
+  <script src="js/adapters/form16a.js"></script>
+  <script src="js/adapters/bank_interest.js"></script>
   <script src="js/adapters/index.js"></script>
   <script src="js/adapters/brokers.js"></script>
+  <script src="js/bulk_import.js"></script>
   <script src="js/reports/index.js"></script>
   <script src="js/app.js"></script>
 </body>

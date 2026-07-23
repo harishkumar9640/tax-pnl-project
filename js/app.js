@@ -1074,6 +1074,324 @@
   }
 
   // ============================================================
+  // Bulk import (drop zone + staging table + apply)
+  // ============================================================
+  //
+  // Allows the user to drop a mix of files at once and have them
+  // auto-classified, parsed, and routed to the right year's
+  // workbook. Conflicts (e.g. Form 16 TDS ≠ 26AS TDS) are shown
+  // per-row with a side-by-side "Use existing / Use incoming / Sum"
+  // picker. The user clicks "Apply all" to commit.
+
+  // Module-level staging state. Cleared by "Clear staging" or after
+  // a successful apply.
+  let bulkStagingRows = [];
+  let bulkStagingResolutions = {};  // { rowId: { field: 'existing'|'incoming'|'sum' } }
+  let bulkStagingCrossConflicts = [];
+
+  function bindBulkImport() {
+    const dropZone = document.getElementById("bulkDropZone");
+    const fileInput = document.getElementById("bulkFileInput");
+    const clearBtn = document.getElementById("bulkClear");
+    const applyBtn = document.getElementById("bulkApplyAll");
+    if (!dropZone || !fileInput) return;
+
+    // Click to open file browser
+    dropZone.addEventListener("click", () => fileInput.click());
+    dropZone.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        fileInput.click();
+      }
+    });
+
+    // Drag-and-drop visual state
+    ["dragenter", "dragover"].forEach((evt) => {
+      dropZone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add("drag-over");
+      });
+    });
+    ["dragleave", "drop"].forEach((evt) => {
+      dropZone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove("drag-over");
+      });
+    });
+
+    // Handle dropped files
+    dropZone.addEventListener("drop", (e) => {
+      const files = e.dataTransfer && e.dataTransfer.files;
+      if (files && files.length > 0) {
+        handleBulkFiles(files);
+      }
+    });
+
+    // Handle file input (click to browse)
+    fileInput.addEventListener("change", (e) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        handleBulkFiles(files);
+      }
+      // Clear the input so the same file can be re-selected
+      e.target.value = "";
+    });
+
+    // Clear staging
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        bulkStagingRows = [];
+        bulkStagingResolutions = {};
+        renderBulkStaging();
+        setBulkStatus("", "");
+      });
+    }
+
+    // Apply all
+    if (applyBtn) {
+      applyBtn.addEventListener("click", () => {
+        const okRows = bulkStagingRows.filter((r) => r.ok && !r.duplicate);
+        if (okRows.length === 0) {
+          setBulkStatus("No files to apply (all duplicates or failed to parse).", "error");
+          return;
+        }
+        // Run conflict detection against current workbooks before applying
+        runConflictDetection();
+        // Apply
+        const results = window.bulkImport.applyBatch(okRows, bulkStagingResolutions);
+        // Refresh year cards and form if we're on the year view
+        renderYearCards();
+        const wb = window.taxDataModel.loadWorkbook(currentAy);
+        if (wb) renderYearForm(wb);
+        recompute();
+        // Clear staging and report
+        const appliedCount = results.applied.length;
+        const skippedCount = results.skipped.length;
+        const errorCount = results.errors.length;
+        let msg = `Applied ${appliedCount} file(s)`;
+        if (skippedCount > 0) msg += `, skipped ${skippedCount}`;
+        if (errorCount > 0) msg += `, ${errorCount} error(s)`;
+        msg += ".";
+        if (appliedCount > 0) {
+          bulkStagingRows = [];
+          bulkStagingResolutions = {};
+          renderBulkStaging();
+          setBulkStatus(msg, "success");
+        } else {
+          setBulkStatus(msg, "error");
+        }
+      });
+    }
+  }
+
+  async function handleBulkFiles(fileList) {
+    const files = Array.from(fileList);
+    if (files.length === 0) return;
+    setBulkStatus(`Reading ${files.length} file(s)…`, "working");
+    try {
+      const { rows } = await window.bulkImport.parseBulk(files);
+      // Append to existing staging (don't clear previous drops)
+      bulkStagingRows = bulkStagingRows.concat(rows);
+      // Reset resolutions for new rows
+      for (const r of rows) {
+        bulkStagingResolutions[r.id] = bulkStagingResolutions[r.id] || {};
+      }
+      runConflictDetection();
+      renderBulkStaging();
+      const okCount = rows.filter((r) => r.ok).length;
+      const dupCount = rows.filter((r) => r.duplicate).length;
+      const errCount = rows.filter((r) => !r.ok).length;
+      let msg = `Parsed ${rows.length} file(s): ${okCount} ok`;
+      if (dupCount > 0) msg += `, ${dupCount} duplicate(s) flagged`;
+      if (errCount > 0) msg += `, ${errCount} error(s)`;
+      msg += ".";
+      setBulkStatus(msg, okCount > 0 ? "success" : "error");
+    } catch (err) {
+      setBulkStatus(`Bulk parse failed: ${err.message || err}`, "error");
+    }
+  }
+
+  function runConflictDetection() {
+    const dm = window.taxDataModel;
+    for (const row of bulkStagingRows) {
+      if (!row.ok || !row.targetAy || row.duplicate) {
+        row.conflicts = [];
+        continue;
+      }
+      const wb = dm.loadWorkbook(row.targetAy);
+      row.conflicts = window.bulkImport.detectConflicts(row, wb);
+    }
+    // Cross-file conflicts (multi-file same-AY disagreement)
+    const cross = window.bulkImport.detectCrossFileConflicts(
+      bulkStagingRows.filter((r) => r.ok && !r.duplicate)
+    );
+    bulkStagingCrossConflicts = cross;
+  }
+
+  function renderBulkStaging() {
+    const root = document.getElementById("bulkStaging");
+    const actions = document.getElementById("bulkActions");
+    if (!root) return;
+    if (bulkStagingRows.length === 0) {
+      root.innerHTML = "";
+      if (actions) actions.style.display = "none";
+      return;
+    }
+    if (actions) actions.style.display = "flex";
+    // Render summary at top of actions
+    let summaryHtml = "";
+    const existingSummary = actions.querySelector(".bulk-summary");
+    if (existingSummary) existingSummary.remove();
+    if (actions) {
+      const okCount = bulkStagingRows.filter((r) => r.ok && !r.duplicate).length;
+      const dupCount = bulkStagingRows.filter((r) => r.duplicate).length;
+      const errCount = bulkStagingRows.filter((r) => !r.ok).length;
+      const aySet = new Set(bulkStagingRows.map((r) => r.targetAy).filter(Boolean));
+      summaryHtml = `<span class="bulk-summary">${okCount} file(s) ready, ${dupCount} duplicate, ${errCount} error · ${aySet.size} AY(s) targeted</span>`;
+      actions.insertAdjacentHTML("afterbegin", summaryHtml);
+    }
+
+    // Render each row
+    root.innerHTML = bulkStagingRows.map(renderBulkRow).join("");
+    // Wire up per-row handlers
+    root.querySelectorAll("[data-remove]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const id = e.target.getAttribute("data-remove");
+        bulkStagingRows = bulkStagingRows.filter((r) => r.id !== id);
+        delete bulkStagingResolutions[id];
+        renderBulkStaging();
+      });
+    });
+    root.querySelectorAll("[data-ay]").forEach((sel) => {
+      sel.addEventListener("change", (e) => {
+        const id = e.target.getAttribute("data-row-id");
+        const ay = e.target.value;
+        const row = bulkStagingRows.find((r) => r.id === id);
+        if (row) {
+          row.targetAy = ay;
+          const fyInfo = window.taxDataModel.findAy(ay);
+          row.targetFy = fyInfo ? fyInfo.fy : null;
+          // Re-run conflict detection
+          runConflictDetection();
+          renderBulkStaging();
+        }
+      });
+    });
+    root.querySelectorAll("[data-resolution]").forEach((rad) => {
+      rad.addEventListener("change", (e) => {
+        const id = e.target.getAttribute("data-row-id");
+        const field = e.target.getAttribute("data-field");
+        const val = e.target.value;
+        if (!bulkStagingResolutions[id]) bulkStagingResolutions[id] = {};
+        bulkStagingResolutions[id][field] = val;
+      });
+    });
+  }
+
+  function renderBulkRow(row) {
+    const isErr = !row.ok || row.errors.length > 0;
+    const isDup = row.duplicate;
+    const isWarn = row.warnings.length > 0 && !isErr && !isDup;
+    const icon = kindIcon(row.kind);
+    const kindLabel = kindLabel_(row.kind);
+    const cls = isErr ? "is-error" : isDup ? "is-duplicate" : isWarn ? "is-warning" : "";
+    // AY selector (when AY is missing or user wants to override)
+    const ayOptions = window.taxDataModel.supportedAys().map((a) =>
+      `<option value="${a.ay}" ${row.targetAy === a.ay ? "selected" : ""}>${escapeHtml(a.label)}</option>`
+    ).join("");
+    const ayPicker = `<select class="row-ay-picker" data-ay data-row-id="${row.id}" title="Override target AY">${ayOptions}</select>`;
+    // Conflicts
+    let conflictsHtml = "";
+    if (row.conflicts && row.conflicts.length > 0) {
+      const items = row.conflicts.map((c) => {
+        const existing = inr(c.existing);
+        const incoming = inr(c.incoming);
+        const res = (bulkStagingResolutions[row.id] || {})[c.field] || "incoming";
+        return `
+          <div class="row-conflict">
+            <span><strong>${escapeHtml(c.field)}</strong> · existing: ${existing} · incoming: ${incoming}</span>
+            <label><input type="radio" name="res-${row.id}-${escapeHtml(c.field)}" data-resolution data-row-id="${row.id}" data-field="${escapeHtml(c.field)}" value="existing" ${res === "existing" ? "checked" : ""}> existing</label>
+            <label><input type="radio" name="res-${row.id}-${escapeHtml(c.field)}" data-resolution data-row-id="${row.id}" data-field="${escapeHtml(c.field)}" value="incoming" ${res === "incoming" ? "checked" : ""}> incoming</label>
+            <label><input type="radio" name="res-${row.id}-${escapeHtml(c.field)}" data-resolution data-row-id="${row.id}" data-field="${escapeHtml(c.field)}" value="sum" ${res === "sum" ? "checked" : ""}> sum</label>
+          </div>
+        `;
+      }).join("");
+      conflictsHtml = `<div class="row-conflicts">${items}</div>`;
+    }
+    // Errors / warnings
+    let errHtml = "";
+    if (row.errors && row.errors.length > 0) {
+      errHtml = `<div class="row-errors">${row.errors.map(escapeHtml).join("<br>")}</div>`;
+    }
+    let warnHtml = "";
+    if (row.warnings && row.warnings.length > 0) {
+      warnHtml = `<div class="row-warnings">${row.warnings.map(escapeHtml).join("<br>")}</div>`;
+    }
+    // Meta line
+    const ay = row.targetAy || "—";
+    const fy = row.targetFy || "—";
+    const sizeKb = row.size > 0 ? (row.size / 1024).toFixed(1) + " KB" : "";
+    const meta = `${kindLabel} · ${sizeKb ? sizeKb + " · " : ""}AY ${ay} (FY ${fy}) · ${row.targetSection || "?"}`;
+    return `
+      <div class="bulk-row ${cls}">
+        <div class="row-icon">${icon}</div>
+        <div class="row-body">
+          <div class="row-filename">
+            <span class="row-kind-tag ${row.kind}">${escapeHtml(kindLabel)}</span>
+            ${escapeHtml(row.filename)}
+            ${row.duplicate ? '<span class="row-kind-tag" style="background:#f3f4f6;color:#6b7280;">DUPLICATE</span>' : ""}
+            ${ayPicker}
+          </div>
+          <div class="row-meta">${escapeHtml(meta)}</div>
+          ${errHtml}
+          ${warnHtml}
+          ${conflictsHtml}
+        </div>
+        <div class="row-actions">
+          <button data-remove="${row.id}" title="Remove from staging">✕</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function kindIcon(kind) {
+    const map = {
+      form16: "📄",
+      form16a: "📑",
+      form26as: "🏦",
+      ais: "🏦",
+      bank_interest: "💰",
+      broker_pnl: "📈",
+      unknown: "❓",
+    };
+    return map[kind] || "📎";
+  }
+  function kindLabel_(kind) {
+    const map = {
+      form16: "Form 16",
+      form16a: "Form 16A",
+      form26as: "26AS",
+      ais: "AIS",
+      bank_interest: "Bank interest",
+      broker_pnl: "Broker P&L",
+      unknown: "Unknown",
+    };
+    return map[kind] || kind;
+  }
+  function inr(n) {
+    if (n === null || n === undefined) return "—";
+    return "₹" + Number(n).toLocaleString("en-IN");
+  }
+  function setBulkStatus(text, kind) {
+    const el = document.getElementById("bulkStatus");
+    if (!el) return;
+    el.textContent = text || "";
+    el.className = "bulk-status" + (kind ? " " + kind : "");
+  }
+
+  // ============================================================
   // Export buttons
   // ============================================================
 
@@ -1133,6 +1451,7 @@
     bindYearFormFields();
     bindAddButtons();
     bindImports();
+    bindBulkImport();
     bindExports();
     bindProfile();
     loadProfileFromStorage();

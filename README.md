@@ -17,6 +17,12 @@ portfolio-tracker repo).
 - **Auto-routing uploads**: Form 16 / 26AS / broker P&L
   auto-detect the AY from file content and write to the right
   year's workbook. No more picking the AY first.
+- **Bulk import (v1.2)**: drag-and-drop a mix of files at once
+  (Form 16, Form 16A, Form 26AS / AIS, bank interest certificate,
+  broker P&L). Auto-classifies each file, detects the FY, and
+  pre-fills a staging table. Conflicts (e.g. Form 16 TDS ≠ 26AS
+  TDS) are shown per-row with side-by-side "use existing / use
+  incoming / sum" pickers. Click "Apply all" to commit.
 - **Profile is global**: PAN, name, address, bank, mobile — used
   across all year workbooks. Stored separately so you enter
   these once.
@@ -86,12 +92,15 @@ webapp-itr-workbook/
     tax_engine.js                     # Indian tax computation (both regimes)
     validation.js                     # JSON-schema-style validator
     integrations.js                   # Form 16, Form 26AS, ITR preview
+    bulk_import.js                    # v1.2: drop zone, classify, dedup, conflict detect, apply
     pdfjs-stub.js                     # real PDF.js wrapper (loads from CDN)
     sheetjs-loader.js                 # SheetJS wrapper (loads from CDN)
     app.js                            # UI controller (views, routing, auto-routing uploads)
     adapters/
       index.js                        # ITR-1/2 selector, JSON export, file download, clipboard
       brokers.js                      # Angel One + Zerodha xlsx/csv parsers
+      form16a.js                      # v1.2: Form 16A (TDS on salary certificate) parser
+      bank_interest.js                # v1.2: bank interest certificate / statement parser
     reports/
       index.js                        # printable summary report
     tests/
@@ -111,6 +120,7 @@ webapp-itr-workbook/
       test_brokers.spec.js                    # 35 tests
       test_multi_year.spec.js                 # 39 tests (profile split, AY detection, migration)
       test_auto_route.spec.js                 # 17 tests (upload → AY auto-routing)
+      test_bulk_import.spec.js                # 48 tests (v1.2: classify, dedup, conflict, batch apply)
 ```
 
 ## Running the tests
@@ -118,7 +128,7 @@ webapp-itr-workbook/
 ```bash
 cd webapp-itr-workbook
 npm install   # one-time
-npm test      # 446 tests, ~280ms
+npm test      # 535 tests, ~340ms
 ```
 
 ## Browser usage (the UI)
@@ -150,6 +160,48 @@ button.
 npx vercel --prod
 ```
 
+## Bulk import (v1.2)
+
+On the **Imports** tab, the **📦 Bulk import for an FY** drop zone accepts
+any mix of files at once. Drop them in and the app auto-classifies each:
+
+| File type | Detected by | Routed to |
+|---|---|---|
+| Form 16 PDF / TXT | `TAN` + `Gross Salary` in text | `salary.employers[0]`, `salary.tds_total` |
+| Form 16A PDF / TXT | `Form 16A` or `TDS on Salary Certificate` | `salary.tds_total` (consolidated across quarters) |
+| Form 26AS / AIS JSON | Section keys (`TDS_on_Salary`, `Advance_Tax`, etc.) | `taxes_paid.*`, cross-check `salary.tds_total` |
+| Bank interest cert PDF / TXT | Bank name + `Interest Certificate` | `other_sources.{savings,fd,rd}_interest` |
+| Bank statement CSV / JSON | `date`, `description`, `amount` columns | `other_sources.{savings_interest,dividend_gross}` |
+| Broker Tax P&L xlsx / CSV | `xlsx`/`.xls`/Zerodha CSV headers | `capital_gains.{stcg,ltcg}_{111a,other}` + `other_sources.dividend_gross` |
+
+**What happens after drop:**
+
+1. Each file is parsed by the right adapter. A staging row appears
+   with the file's icon, type tag, target AY (auto-detected), and any
+   warnings.
+2. If a file is for an FY that has a saved workbook, **conflicts** are
+   shown per-row: side-by-side existing vs incoming, with a per-field
+   radio: `existing` / `incoming` (default) / `sum`. For example, if
+   your Form 16 says TDS ₹1,50,000 and your 26AS says ₹1,60,000,
+   you can pick the one you trust, or sum them.
+3. **Cross-file conflicts** (two files in the same drop that disagree
+   on the same field) are also surfaced.
+4. **Duplicate detection** by content hash: if you drop the same file
+   twice, the second one is flagged and skipped.
+5. Click **Apply all to workbooks** to commit. Workbooks are saved
+   per-AY (so dropping files for both AY 2025-26 and AY 2024-25
+   commits to both independently in one batch).
+6. After apply, the staging table clears and the recompute panel on
+   the right updates.
+
+**Per-row controls:** the staging table has a remove (✕) button per
+row and a per-row AY override dropdown for files where the FY could
+not be auto-detected.
+
+**Advanced (legacy) inputs** are still available under a collapsed
+`<details>` block at the bottom of the Imports tab for users who
+prefer the old one-file-at-a-time workflow.
+
 ## Programmatic usage (Node REPL or library)
 
 ```js
@@ -175,6 +227,12 @@ const adapters = require("./js/adapters/index.js");
 const reports = require("./js/reports/index.js");
 const itrJson = adapters.toItrJson(wb, result, profile);
 const reportText = reports.buildReport(wb, result);
+
+// Bulk import (v1.2+)
+const bulk = require("./js/bulk_import.js");
+const { rows } = await bulk.parseBulk([fileObj1, fileObj2, fileObj3]);
+// Each row has { kind, targetAy, parsed, conflicts, ... }
+const results = bulk.applyBatch(rows, {});  // { applied, skipped, errors }
 ```
 
 ## Architecture decisions
